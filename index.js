@@ -13,7 +13,7 @@ const letTheChunkingBegin = ffmpeg(audioPath)
   .outputOptions([
     "-af",
     // Adjust 'noise' value to tweak silence threshold
-    "silencedetect=noise=-30dB:d=5.0",
+    "silencedetect=noise=-40dB:d=3.0",
     "-f",
     "null",
   ])
