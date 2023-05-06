@@ -23,11 +23,14 @@ const letTheChunkingBegin = ffmpeg(audioPath)
   })
   .on("stderr", (stderrLine) => {
     // Extract start and end times of silence
-    const silenceStartRegex = /silence_start: (\d+\.\d+)/;
+    const silenceStartRegex = /silence_start: (\d+(\.\d+)?)/;
     const silenceEndRegex = /silence_end: (\d+\.\d+)/;
 
     const startMatch = silenceStartRegex.exec(stderrLine);
     const endMatch = silenceEndRegex.exec(stderrLine);
+    if (!startMatch && !endMatch) {
+      return;
+    }
 
     if (startMatch) {
       const silenceStart = parseFloat(startMatch[1]);
@@ -44,6 +47,7 @@ const letTheChunkingBegin = ffmpeg(audioPath)
   .on("end", () => {
     console.log("Silence detection complete.");
     splitAudio();
+    console.log("segments: ", segments);
   });
 
 // Execute the command
