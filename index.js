@@ -12,7 +12,7 @@ const silenceDetect = ffmpeg(audioPath)
     "-af",
     // Adjust '-50db' value to tweak silence volume threshold
     // Adjust '3.0' value to tweak silence duration threshold
-    "silencedetect=noise=-50dB:d=3.0",
+    "silencedetect=noise=-30dB:d=4.0",
     "-f",
     "null",
   ])
@@ -28,6 +28,18 @@ const silenceDetect = ffmpeg(audioPath)
 
     const startMatch = silenceStartRegex.exec(stderrLine);
     const endMatch = silenceEndRegex.exec(stderrLine);
+
+    // TODO: change logic in here to make segments
+
+    // check whole file
+
+    // if less than 30 minutes long, do not split
+
+    // else find first segment after 30 minutes, when silent
+    // keep looking up to 30 minutes for a segment
+    // if none found ? error
+    // split the audio in the middle point of the silent segment
+    // continue process until audio end
 
     if (startMatch) {
       silenceStart = parseFloat(startMatch[1]);
@@ -57,7 +69,7 @@ function splitAudio(audioPath, segments) {
     fs.mkdirSync(outputDir);
   }
 
-  let start = 0;
+  // let start = 0;
   // segments.forEach((segment, index) => {
   //   const cutStart = start;
   //   const cutEnd = (segment.start + segment.end) / 2;
