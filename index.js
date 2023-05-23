@@ -4,6 +4,16 @@ import fs from "fs";
 
 const audioPath = path.join(process.cwd(), "audio.mp3");
 
+// get duration of file
+let duration;
+ffmpeg.ffprobe(audioPath, (err, metadata) => {
+  if (err) {
+    console.log(err);
+    return;
+  }
+  duration = metadata.format.duration;
+});
+
 let segments = [];
 let silenceStart;
 
@@ -60,8 +70,8 @@ const silenceDetect = ffmpeg(audioPath)
     splitAudio(audioPath, segments);
   });
 
-// Execute the command
-silenceDetect.exec();
+// Execute the command if duration is longer than 30 minutes
+if (duration > 1800) silenceDetect.exec();
 
 function splitAudio(audioPath, segments) {
   const outputDir = path.join(process.cwd(), "output");
