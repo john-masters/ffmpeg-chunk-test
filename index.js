@@ -2,6 +2,8 @@ import ffmpeg from "fluent-ffmpeg";
 import path from "path";
 import fs from "fs";
 
+const silenceVolume = -30; // in decibels
+const silenceDuration = 2.0; // in seconds
 const audioPath = path.join(process.cwd(), "audio.mp3");
 
 function getDuration(audioPath) {
@@ -17,14 +19,18 @@ function getDuration(audioPath) {
 }
 
 let segments = [];
+// 1800 seconds = 30 minutes
+let splitTimes = [
+  1800, 3600, 5400, 7200, 9000, 10800, 12600, 14400, 16200, 18000,
+];
+let currentSplitTime = 0;
 let silenceStart;
+let possibleSplit;
 
 const silenceDetect = ffmpeg(audioPath)
   .outputOptions([
     "-af",
-    // Adjust '-50db' value to tweak silence volume threshold
-    // Adjust '3.0' value to tweak silence duration threshold
-    "silencedetect=noise=-30dB:d=4.0",
+    `silencedetect=noise=${silenceVolume}dB:d=${silenceDuration}`,
     "-f",
     "null",
   ])
@@ -33,50 +39,32 @@ const silenceDetect = ffmpeg(audioPath)
     console.log("Starting silence detection");
   })
   .on("stderr", (stderrLine) => {
-    // console.log(stderrLine);
-    // Extract start and end times of silence
     const silenceStartRegex = /silence_start: (\d+(\.\d+)?)/;
     const silenceEndRegex = /silence_end: (\d+\.\d+)/;
 
     const startMatch = silenceStartRegex.exec(stderrLine);
     const endMatch = silenceEndRegex.exec(stderrLine);
 
-    // TODO: change logic in here to make segments
-
-    // check whole file
-
-    // if less than 30 minutes long, do not split
-
-    // else find first segment after 30 minutes, when silent
-    // keep looking up to 30 minutes for a segment
-    // if none found ? error
-    // split the audio in the middle point of the silent segment
-    // continue process until audio end
-
     if (startMatch) {
       silenceStart = parseFloat(startMatch[1]);
-      // console.log(`Silence detected at ${silenceStart}s`);
     } else if (endMatch) {
       const silenceEnd = parseFloat(endMatch[1]);
-      // console.log(`Silence ended at ${silenceEnd}s`);
-      segments.push({ start: silenceStart, end: silenceEnd });
-    } else {
-      // maybe add error if no silence in audio detected?
-      // or may need to change silence thresholds
-      // console.log(stderrLine);
+      // If this silence occurs after the current split time, save it as a definite split point and move on to the next split time
+      if (silenceStart > splitTimes[currentSplitTime]) {
+        const silenceMid = (silenceStart + silenceEnd) / 2;
+        segments.push(silenceMid);
+        currentSplitTime++;
+      }
     }
   })
   .on("end", () => {
     console.log("Silence detection complete.");
-    console.log("segments: ", segments);
     splitAudio(audioPath, segments);
   });
 
-// Execute the command if duration is longer than 30 minutes
-
 getDuration(audioPath).then((duration) => {
   console.log(duration);
-  if (duration > 1800) silenceDetect.exec();
+  if (duration > 1800) silenceDetect.run();
 });
 
 function splitAudio(audioPath, segments) {
@@ -85,46 +73,53 @@ function splitAudio(audioPath, segments) {
     fs.mkdirSync(outputDir);
   }
 
-  // let start = 0;
-  // segments.forEach((segment, index) => {
-  //   const cutStart = start;
-  //   const cutEnd = (segment.start + segment.end) / 2;
-  //   const outputFileName = `part-${index + 1}.mp3`;
-  //   const outputPath = path.join(outputDir, outputFileName);
-  //   ffmpeg(audioPath)
-  //     .setStartTime(cutStart)
-  //     .setDuration(cutEnd - cutStart)
-  //     .output(outputPath)
-  //     .on("start", () => {
-  //       console.log(`Starting to split segment ${index + 1}`);
-  //     })
-  //     .on("end", () => {
-  //       console.log(`Finished splitting segment ${index + 1}`);
-  //     })
-  //     .on("error", (err) => {
-  //       console.log(
-  //         `Error occurred while splitting segment ${index + 1}: ${err.message}`
-  //       );
-  //     })
-  //     .run();
-  //   start = cutEnd;
-  //   console.log(`start: ${start}`);
-  // });
-  // const outputFileName = `part-${segments.length + 1}.mp3`;
-  // const outputPath = path.join(outputDir, outputFileName);
-  // ffmpeg(audioPath)
-  //   .setStartTime(start)
-  //   .output(outputPath)
-  //   .on("start", () => {
-  //     console.log(`Starting to split the last segment`);
-  //   })
-  //   .on("end", () => {
-  //     console.log(`Finished splitting the last segment`);
-  //   })
-  //   .on("error", (err) => {
-  //     console.log(
-  //       `Error occurred while splitting the last segment: ${err.message}`
-  //     );
-  //   })
-  //   .run();
+  console.log("segments: ", segments);
+
+  let start = 0;
+  segments.forEach((segment, index) => {
+    const cutStart = start;
+    const cutEnd = segment;
+    const outputFileName = `part-${index + 1}.mp3`;
+    const outputPath = path.join(outputDir, outputFileName);
+    ffmpeg(audioPath)
+      .noVideo()
+      .audioFrequency(16000)
+      .audioBitrate(32)
+      .audioChannels(1)
+      .audioCodec("libmp3lame")
+      .format("mp3")
+      .setStartTime(cutStart)
+      .setDuration(cutEnd - cutStart)
+      .output(outputPath)
+      .on("start", () => {
+        console.log(`Starting to split segment ${index + 1}`);
+      })
+      .on("end", () => {
+        console.log(`Finished splitting segment ${index + 1}`);
+      })
+      .on("error", (err) => {
+        console.log(
+          `Error occurred while splitting segment ${index + 1}: ${err.message}`
+        );
+      })
+      .run();
+    start = cutEnd;
+  });
+  const outputFileName = `part-${segments.length + 1}.mp3`;
+  const outputPath = path.join(outputDir, outputFileName);
+  ffmpeg(audioPath)
+    .setStartTime(start)
+    .output(outputPath)
+    .on("start", () => {
+      console.log(`Starting to split the last segment`);
+    })
+    .on("end", () => {
+      console.log(`Finished splitting the last segment`);
+    })
+    .on("error", (err) => {
+      console.log(
+        `Error occurred while splitting the last segment: ${err.message}`
+      );
+    })
+    .run();
 }
