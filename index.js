@@ -63,7 +63,6 @@ const silenceDetect = ffmpeg(audioPath)
   });
 
 getDuration(audioPath).then((duration) => {
-  console.log(duration);
   if (duration > 1800) silenceDetect.run();
 });
 
@@ -72,8 +71,6 @@ function splitAudio(audioPath, segments) {
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir);
   }
-
-  console.log("segments: ", segments);
 
   let start = 0;
   segments.forEach((segment, index) => {
@@ -84,7 +81,7 @@ function splitAudio(audioPath, segments) {
     ffmpeg(audioPath)
       .noVideo()
       .audioFrequency(16000)
-      .audioBitrate(32)
+      .audioBitrate(48)
       .audioChannels(1)
       .audioCodec("libmp3lame")
       .format("mp3")
